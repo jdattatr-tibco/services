@@ -20,5 +20,9 @@
     "cacert": "/home/user/postgres-ssl/rootCA.crt.pem",
     "clientcert": "/home/user/postgres-ssl/client.crt.pem",
     "clientkey": "/home/user/postgres-ssl/client.key.pem"
+  },
+  "messaging":{
+    "pulsarUrl":"pulsar://localhost:6650",
+    "payloadTopic":"persistent://public/default/SMServicePayloadTopic"
   }
 }

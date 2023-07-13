@@ -10,6 +10,7 @@ import (
 
 	"github.com/project-flogo/core/support/log"
 	"github.com/project-flogo/core/support/service"
+	"github.com/project-flogo/services/flow-state/server/messaging"
 	"github.com/project-flogo/services/flow-state/server/rest"
 )
 
@@ -80,6 +81,23 @@ func main() {
 	}
 
 	logger.Info("TIBCO Flogo Flow State Manager Started Successfully")
+
+	if settings["messaging"] != nil {
+		mf := &messaging.MessagingServiceFactory{}
+		st, err := mf.NewService(cfg)
+		if err != nil {
+			logger.Errorf("Failed to start messaging state manager: %v\n", err)
+			os.Exit(1)
+		}
+
+		err = st.Start()
+		if err != nil {
+			logger.Errorf("Failed to start messaging state manager: %v\n", err)
+			os.Exit(1)
+		}
+
+	}
+	logger.Info("Messaging Started Successfully")
 
 	exitChan := setupSignalHandling()
 
