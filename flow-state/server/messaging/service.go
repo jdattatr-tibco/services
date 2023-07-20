@@ -1,9 +1,6 @@
 package messaging
 
 import (
-	"fmt"
-
-	"github.com/project-flogo/core/data/coerce"
 	"github.com/project-flogo/core/support/log"
 	"github.com/project-flogo/core/support/service"
 )
@@ -46,19 +43,10 @@ type MessagingService struct {
 
 func (ms *MessagingService) init(settings map[string]interface{}) error {
 
-	url, set := settings[BrokerUrl]
-	if !set {
-		return fmt.Errorf("Messaging broker url not set")
-	}
-	brokerUrl, err := coerce.ToString(url)
-	if err != nil {
-		return fmt.Errorf("Unable to coerce broker url %v to string %s", url, err)
-	}
-
 	var options []func(*Server)
 	options = append(options, AddConsumerOptions(settings))
 
-	server, err := newServer(brokerUrl, options...)
+	server, err := newServer(settings, options...)
 	if err != nil {
 		return err
 	}

@@ -2,6 +2,7 @@ package messaging
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync"
 
 	"github.com/apache/pulsar-client-go/pulsar"
@@ -11,9 +12,13 @@ import (
 )
 
 const (
-	PAYLOAD_TYPE          = "payload_type"
-	PAYLOAD_TYPE_STEP     = "step"
-	PAYLOAD_TYPE_SNAPSHOT = "snapshot"
+	PAYLOAD_TYPE             = "payload_type"
+	PAYLOAD_TYPE_STEP        = "step"
+	PAYLOAD_TYPE_SNAPSHOT    = "snapshot"
+	PAYLOAD_TYPE_STATE_START = "state_start"
+	PAYLOAD_TYPE_STATE_END   = "state_end"
+	AUTH_TYPE                = "authentication"
+	JWT_TOKEN                = "jwt_token"
 )
 
 type Server struct {
@@ -26,14 +31,31 @@ type Server struct {
 	stepStore       store.Store
 }
 
-func newServer(brokerUrl string, opts ...func(*Server)) (*Server, error) {
+func newServer(settings map[string]interface{}, opts ...func(*Server)) (*Server, error) {
+	url, set := settings[BrokerUrl]
+	if !set {
+		return nil, fmt.Errorf("Messaging broker url not set")
+	}
+	brokerUrl, err := coerce.ToString(url)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to coerce broker url %v to string %s", url, err)
+	}
+
 	srv := &Server{
 		stepStore: store.RegistedStore(),
 	}
 
+	authType, set := settings[AUTH_TYPE]
+	jwtToken, set := settings[JWT_TOKEN]
+
 	srv.clientOpts = pulsar.ClientOptions{
 		URL: brokerUrl,
 	}
+	switch authType {
+	case "JWT":
+		srv.clientOpts.Authentication = pulsar.NewAuthenticationToken(fmt.Sprintf("%v", jwtToken))
+	}
+
 	for _, opt := range opts {
 		opt(srv)
 	}
@@ -94,6 +116,34 @@ func (s *Server) handleMessage(msg pulsar.ConsumerMessage) {
 		err = s.stepStore.SaveSnapshot(snapshot)
 		if err != nil {
 			logger.Errorf("Error saving snapshot - %v", err)
+			return
+		}
+		s.consumer.Ack(msg)
+		break
+	case PAYLOAD_TYPE_STATE_START:
+		state := &state.FlowState{}
+		err := json.Unmarshal(msg.Payload(), state)
+		if err != nil {
+			logger.Errorf("Error parsing the message [%v]", msg.Payload())
+			s.consumer.Nack(msg)
+		}
+		err = s.stepStore.RecordStart(state)
+		if err != nil {
+			logger.Errorf("Error saving state start - %v", err)
+			return
+		}
+		s.consumer.Ack(msg)
+		break
+	case PAYLOAD_TYPE_STATE_END:
+		state := &state.FlowState{}
+		err := json.Unmarshal(msg.Payload(), state)
+		if err != nil {
+			logger.Errorf("Error parsing the message [%v]", msg.Payload())
+			s.consumer.Nack(msg)
+		}
+		err = s.stepStore.RecordEnd(state)
+		if err != nil {
+			logger.Errorf("Error saving state end - %v", err)
 			return
 		}
 		s.consumer.Ack(msg)
